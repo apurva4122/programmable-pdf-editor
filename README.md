@@ -92,7 +92,18 @@ The frontend will run on `http://localhost:3000`
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
 
-### Quick Deploy
+### Railway Deployment (Recommended)
+
+**Quick Deploy:**
+1. Go to [Railway](https://railway.app)
+2. Create new project from GitHub repo
+3. Add backend service (root: `backend`)
+4. Add frontend service (root: `frontend`)
+5. Set environment variables (see [RAILWAY_DEPLOY.md](./RAILWAY_DEPLOY.md))
+
+See [RAILWAY_DEPLOY.md](./RAILWAY_DEPLOY.md) for complete Railway setup guide.
+
+### Alternative Deployments
 
 **Frontend (Vercel):**
 ```bash
@@ -100,7 +111,7 @@ cd frontend
 vercel
 ```
 
-**Backend (Railway/Heroku):**
+**Backend (Heroku/DigitalOcean):**
 - Connect GitHub repository
 - Set root directory to `backend`
 - Deploy
