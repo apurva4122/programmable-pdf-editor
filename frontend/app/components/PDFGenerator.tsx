@@ -31,8 +31,9 @@ export default function PDFGenerator({
         setProgress(0)
 
         try {
-            const response = await axios.post(
-                'http://localhost:8000/api/generate',
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await axios.post(
+        `${apiUrl}/api/generate`,
                 {
                     pdf_id: pdfId,
                     rules: rules,

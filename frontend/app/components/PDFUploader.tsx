@@ -26,20 +26,21 @@ export default function PDFUploader({ onUploaded, onSectionsDetected }: PDFUploa
         formData.append('file', file)
 
         try {
-            const response = await axios.post('http://localhost:8000/api/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            })
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await axios.post(`${apiUrl}/api/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
 
             const id = response.data.pdf_id
             setPdfId(id)
             setUploadedFile(file.name)
             onUploaded(id)
 
-            // Automatically process OCR
-            setProcessing(true)
-            const ocrResponse = await axios.post(`http://localhost:8000/api/ocr/${id}`)
-            onSectionsDetected(ocrResponse.data.sections)
-            setProcessing(false)
+      // Automatically process OCR
+      setProcessing(true)
+      const ocrResponse = await axios.post(`${apiUrl}/api/ocr/${id}`)
+      onSectionsDetected(ocrResponse.data.sections)
+      setProcessing(false)
         } catch (error) {
             console.error('Upload error:', error)
             alert('Failed to upload PDF. Please make sure the backend is running.')
