@@ -19,13 +19,19 @@ cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
 # Handle both comma-separated and space-separated origins
 cors_origins = [origin.strip() for origin in cors_origins_str.replace(",", " ").split() if origin.strip()]
 
-# Log CORS origins for debugging (remove in production if needed)
+# Log CORS origins for debugging
 print(f"CORS Origins configured: {cors_origins}")
+print(f"CORS_ORIGINS env var: {os.getenv('CORS_ORIGINS', 'NOT SET')}")
+
+# If CORS_ORIGINS is not set or empty, allow all origins (for debugging)
+if not cors_origins or cors_origins == ["http://localhost:3000"]:
+    print("WARNING: Using permissive CORS (allowing all origins)")
+    cors_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_origins=cors_origins if "*" not in cors_origins else ["*"],
+    allow_credentials=True if "*" not in cors_origins else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -71,7 +77,10 @@ class GenerationRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "Programmable PDF Editor API"}
+    return {
+        "message": "Programmable PDF Editor API",
+        "cors_origins": os.getenv("CORS_ORIGINS", "NOT SET")
+    }
 
 
 @app.post("/api/upload")
