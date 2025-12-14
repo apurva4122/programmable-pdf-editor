@@ -8,5 +8,5 @@ cmds = ["npm install"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "npm start"
+cmd = "PORT=$PORT node .next/standalone/server.js"
 
