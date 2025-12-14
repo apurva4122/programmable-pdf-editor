@@ -41,12 +41,14 @@ export default function PDFUploader({ onUploaded, onSectionsDetected }: PDFUploa
       const ocrResponse = await axios.post(`${apiUrl}/api/ocr/${id}`)
       onSectionsDetected(ocrResponse.data.sections)
       setProcessing(false)
-        } catch (error) {
-            console.error('Upload error:', error)
-            alert('Failed to upload PDF. Please make sure the backend is running.')
-        } finally {
-            setUploading(false)
-        }
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      const errorMessage = error.response?.data?.detail || error.message || 'Unknown error'
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      alert(`Failed to upload PDF.\n\nError: ${errorMessage}\n\nBackend URL: ${apiUrl}\n\nPlease check:\n1. Backend is running on Railway\n2. CORS_ORIGINS includes your Vercel URL\n3. NEXT_PUBLIC_API_URL is set correctly`)
+    } finally {
+      setUploading(false)
+    }
     }
 
     return (
