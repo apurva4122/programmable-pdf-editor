@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    output: 'standalone',
+    // Remove standalone for now - use regular npm start
+    // output: 'standalone',
 }
 
 module.exports = nextConfig
