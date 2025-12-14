@@ -56,7 +56,14 @@ export default function PDFUploader({ onUploaded, onSectionsDetected }: PDFUploa
             } catch (ocrError: any) {
                 console.error('OCR processing error:', ocrError)
                 const ocrErrorMessage = ocrError.response?.data?.detail || ocrError.message || 'Unknown OCR error'
-                alert(`PDF uploaded successfully, but OCR processing failed.\n\nError: ${ocrErrorMessage}\n\nYou can try uploading again or check the backend logs.`)
+                // Show error in console instead of alert for better debugging
+                console.error('OCR Error Details:', {
+                    message: ocrErrorMessage,
+                    response: ocrError.response?.data,
+                    status: ocrError.response?.status
+                })
+                // Still show user-friendly message
+                alert(`PDF uploaded successfully, but OCR processing failed.\n\nError: ${ocrErrorMessage}\n\nCheck browser console (F12) for details.`)
             } finally {
                 setProcessing(false)
             }
