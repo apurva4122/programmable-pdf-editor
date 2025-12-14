@@ -22,9 +22,18 @@ class PDFService:
         Replace text in PDF using PyMuPDF for better text replacement
         replacements: dict mapping original text to new text
         """
+        if not replacements:
+            print("Warning: No replacements provided, returning original PDF")
+            with open(pdf_path, "rb") as f:
+                return f.read()
+        
+        print(f"Replacing {len(replacements)} text strings in PDF")
+        
         if PYMUPDF_AVAILABLE:
-            # Use PyMuPDF (better for text replacement)
-            doc = fitz.open(str(pdf_path))
+            try:
+                # Use PyMuPDF (better for text replacement)
+                doc = fitz.open(str(pdf_path))
+                print(f"Opened PDF with {len(doc)} pages")
             
             for page_num in range(len(doc)):
                 page = doc[page_num]
@@ -63,13 +72,18 @@ class PDFService:
                                 fontsize=font_size
                             )
             
-            # Save to bytes
-            pdf_bytes = doc.tobytes()
-            doc.close()
-            
-            return pdf_bytes
+                # Save to bytes
+                pdf_bytes = doc.tobytes()
+                doc.close()
+                print(f"PDF replacement complete, size: {len(pdf_bytes)} bytes")
+                return pdf_bytes
+            except Exception as e:
+                print(f"PyMuPDF replacement failed: {e}")
+                print("Falling back to PyPDF2")
+                return self._replace_text_pypdf2(pdf_path, replacements)
         else:
             # Fallback to PyPDF2 if PyMuPDF not available
+            print("PyMuPDF not available, using PyPDF2 fallback")
             return self._replace_text_pypdf2(pdf_path, replacements)
     
     def _replace_text_pypdf2(self, pdf_path: Path, replacements: Dict[str, str]) -> bytes:

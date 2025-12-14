@@ -61,39 +61,64 @@ class GeneratorService:
         """Generate multiple PDF copies with replacements"""
         output_files = []
         
-        # Read original PDF sections (we'll need to store original text)
-        # For now, we'll use the section_id to identify what to replace
+        print(f"Generating {num_copies} copies with {len(rules)} rules")
         
         for copy_num in range(num_copies):
-            replacements = {}
-            
-            # Generate replacement values for each rule
-            for rule in rules:
-                original_text = rule.get("original_text", "")
-                new_value = self._generate_value(rule, copy_num)
+            try:
+                print(f"Generating copy {copy_num + 1}/{num_copies}")
+                replacements = {}
                 
-                if original_text and new_value:
-                    replacements[original_text] = new_value
-            
-            # Generate PDF with replacements
-            pdf_bytes = self.pdf_service.replace_text_in_pdf(pdf_path, replacements)
-            
-            # Save to file
-            output_path = self.output_dir / f"{pdf_path.stem}_copy_{copy_num + 1}.pdf"
-            with open(output_path, "wb") as f:
-                f.write(pdf_bytes)
-            
-            output_files.append(output_path)
+                # Generate replacement values for each rule
+                for rule in rules:
+                    original_text = rule.get("original_text", "")
+                    new_value = self._generate_value(rule, copy_num)
+                    
+                    if original_text and new_value:
+                        replacements[original_text] = new_value
+                        print(f"  Rule: '{original_text}' -> '{new_value}'")
+                
+                if not replacements:
+                    print(f"Warning: No replacements generated for copy {copy_num + 1}")
+                
+                # Generate PDF with replacements
+                print(f"  Replacing text in PDF...")
+                pdf_bytes = self.pdf_service.replace_text_in_pdf(pdf_path, replacements)
+                
+                # Save to file
+                output_path = self.output_dir / f"{pdf_path.stem}_copy_{copy_num + 1}.pdf"
+                with open(output_path, "wb") as f:
+                    f.write(pdf_bytes)
+                
+                print(f"  Saved: {output_path}")
+                output_files.append(output_path)
+            except Exception as e:
+                import traceback
+                print(f"Error generating copy {copy_num + 1}: {str(e)}")
+                print(f"Traceback: {traceback.format_exc()}")
+                raise Exception(f"Failed to generate copy {copy_num + 1}: {str(e)}")
         
+        print(f"Successfully generated {len(output_files)} PDF copies")
         return output_files
     
     async def create_zip(self, pdf_files: List[Path], pdf_id: str) -> Path:
         """Create a zip file containing all generated PDFs"""
         zip_path = self.output_dir / f"generated_{pdf_id}.zip"
         
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for pdf_file in pdf_files:
-                zipf.write(pdf_file, pdf_file.name)
-        
-        return zip_path
+        print(f"Creating ZIP file with {len(pdf_files)} PDFs")
+        try:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for pdf_file in pdf_files:
+                    if pdf_file.exists():
+                        zipf.write(pdf_file, pdf_file.name)
+                        print(f"  Added to ZIP: {pdf_file.name}")
+                    else:
+                        print(f"  Warning: File not found: {pdf_file}")
+            
+            print(f"ZIP file created: {zip_path} ({zip_path.stat().st_size} bytes)")
+            return zip_path
+        except Exception as e:
+            import traceback
+            print(f"Error creating ZIP file: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            raise
 

@@ -125,27 +125,45 @@ async def process_ocr(pdf_id: str):
 async def generate_pdfs(request: GenerationRequest):
     """Generate multiple PDF copies with specified replacements"""
     try:
+        print(f"Generating {request.num_copies} PDF copies for {request.pdf_id}")
+        print(f"Rules: {len(request.rules)} replacement rules")
+        
         file_path = UPLOAD_DIR / f"{request.pdf_id}.pdf"
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="PDF not found")
         
+        print(f"PDF file found: {file_path}")
+        
+        # Convert Pydantic models to dicts for the service
+        rules_dict = [rule.dict() for rule in request.rules]
+        
         # Generate PDFs
+        print("Starting PDF generation...")
         output_files = await generator_service.generate_pdfs(
             file_path,
-            request.rules,
+            rules_dict,
             request.num_copies
         )
+        print(f"Generated {len(output_files)} PDF files")
         
         # Create zip file with all generated PDFs
+        print("Creating ZIP file...")
         zip_path = await generator_service.create_zip(output_files, request.pdf_id)
+        print(f"ZIP file created: {zip_path}")
         
         return FileResponse(
             zip_path,
             media_type="application/zip",
             filename=f"generated_pdfs_{request.pdf_id}.zip"
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"PDF Generation Error: {str(e)}")
+        print(f"Traceback: {error_trace}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 
 @app.get("/api/download/{pdf_id}/{copy_number}")
