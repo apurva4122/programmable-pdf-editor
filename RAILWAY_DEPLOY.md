@@ -40,7 +40,9 @@ This guide will help you deploy both the frontend and backend to Railway.
 
 5. **Get Backend URL**
    - Go to Settings → Networking
-   - Generate a public domain
+   - Click "Generate Domain" or "Add Domain"
+   - When asked for **Port**, enter: `8000` (or leave default if Railway auto-detects)
+   - Railway will automatically use the PORT environment variable, but you may need to specify it here
    - Copy the URL (e.g., `https://backend-production-xxxx.up.railway.app`)
 
 ### Frontend Deployment
@@ -68,7 +70,8 @@ This guide will help you deploy both the frontend and backend to Railway.
 
 4. **Get Frontend URL**
    - Go to Settings → Networking
-   - Generate a public domain
+   - Click "Generate Domain" or "Add Domain"
+   - When asked for **Port**, enter: `3000` (or leave default if Railway auto-detects)
    - Your app will be live!
 
 ## Option 2: Deploy via Railway CLI
