@@ -5,21 +5,33 @@ from typing import List, Dict
 from pathlib import Path
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import os
 
 class OCRService:
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=4)
+        # Check if Tesseract is available
+        try:
+            pytesseract.get_tesseract_version()
+            print("Tesseract OCR is available")
+        except Exception as e:
+            print(f"Warning: Tesseract OCR check failed: {e}")
+            print("Make sure Tesseract is installed and in PATH")
     
     async def process_pdf(self, pdf_path: Path) -> List[Dict]:
         """Process PDF with OCR and return text sections with coordinates"""
-        loop = asyncio.get_event_loop()
-        
-        # Convert PDF to images
-        images = await loop.run_in_executor(
-            self.executor,
-            convert_from_path,
-            str(pdf_path)
-        )
+        try:
+            print(f"Starting OCR processing for: {pdf_path}")
+            loop = asyncio.get_event_loop()
+            
+            # Convert PDF to images
+            print("Converting PDF to images...")
+            images = await loop.run_in_executor(
+                self.executor,
+                self._convert_pdf_to_images,
+                str(pdf_path)
+            )
+            print(f"Converted {len(images)} pages to images")
         
         sections = []
         
@@ -84,5 +96,25 @@ class OCRService:
                     "page": page_num
                 })
         
-        return sections
+            print(f"OCR processing complete. Found {len(sections)} text sections")
+            return sections
+        except Exception as e:
+            import traceback
+            print(f"Error in OCR processing: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            raise
+    
+    def _convert_pdf_to_images(self, pdf_path: str):
+        """Convert PDF to images with error handling"""
+        try:
+            # Check if poppler is available
+            images = convert_from_path(
+                pdf_path,
+                dpi=200,  # Lower DPI for faster processing
+                thread_count=2
+            )
+            return images
+        except Exception as e:
+            print(f"Error converting PDF to images: {e}")
+            raise Exception(f"Failed to convert PDF to images. Make sure poppler-utils is installed. Error: {str(e)}")
 

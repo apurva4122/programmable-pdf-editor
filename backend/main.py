@@ -107,10 +107,18 @@ async def process_ocr(pdf_id: str):
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="PDF not found")
         
+        print(f"Processing OCR for PDF: {pdf_id}")
         sections = await ocr_service.process_pdf(file_path)
+        print(f"OCR completed. Found {len(sections)} sections")
         return {"sections": sections}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"OCR Error: {str(e)}")
+        print(f"Traceback: {error_trace}")
+        raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
 
 
 @app.post("/api/generate")
