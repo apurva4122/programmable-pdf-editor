@@ -15,10 +15,16 @@ from services.generator_service import GeneratorService
 app = FastAPI(title="Programmable PDF Editor API")
 
 # CORS middleware - read from environment variable
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+# Handle both comma-separated and space-separated origins
+cors_origins = [origin.strip() for origin in cors_origins_str.replace(",", " ").split() if origin.strip()]
+
+# Log CORS origins for debugging (remove in production if needed)
+print(f"CORS Origins configured: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in cors_origins],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
