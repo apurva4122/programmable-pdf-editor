@@ -16,6 +16,7 @@ node_modules/
 .next/
 out/
 *.log
+package-lock.json
 
 # Uploads and outputs
 backend/uploads/
