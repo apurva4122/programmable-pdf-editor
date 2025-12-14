@@ -34,43 +34,60 @@ class PDFService:
                 # Use PyMuPDF (better for text replacement)
                 doc = fitz.open(str(pdf_path))
                 print(f"Opened PDF with {len(doc)} pages")
-            
-            for page_num in range(len(doc)):
-                page = doc[page_num]
                 
-                for old_text, new_text in replacements.items():
-                    # Search for text instances
-                    text_instances = page.search_for(old_text)
+                for page_num in range(len(doc)):
+                    page = doc[page_num]
+                    print(f"Processing page {page_num + 1}/{len(doc)}")
                     
-                    for inst in text_instances:
-                        # Add redaction annotation
-                        page.add_redact_annot(inst)
-                    
-                    # Apply redactions
-                    if text_instances:
-                        page.apply_redactions()
+                    for old_text, new_text in replacements.items():
+                        print(f"  Searching for: '{old_text}' -> '{new_text}'")
+                        # Search for text instances
+                        text_instances = page.search_for(old_text)
+                        print(f"  Found {len(text_instances)} instances")
                         
-                        # Insert new text at the same position
-                        for inst in text_instances:
-                            # Get font size from original text
-                            text_dict = page.get_text("dict")
-                            font_size = 12  # Default
+                        if text_instances:
+                            # Add redaction annotations
+                            for inst in text_instances:
+                                try:
+                                    page.add_redact_annot(inst)
+                                except Exception as e:
+                                    print(f"    Warning: Could not add redaction: {e}")
                             
-                            # Try to find font size from text blocks
-                            for block in text_dict["blocks"]:
-                                if "lines" in block:
-                                    for line in block["lines"]:
-                                        for span in line["spans"]:
-                                            if old_text in span.get("text", ""):
-                                                font_size = span.get("size", 12)
-                                                break
+                            # Apply redactions
+                            try:
+                                page.apply_redactions()
+                            except Exception as e:
+                                print(f"    Warning: Redaction failed: {e}")
                             
-                            # Insert new text
-                            page.insert_text(
-                                (inst.x0, inst.y0 + font_size),
-                                new_text,
-                                fontsize=font_size
-                            )
+                            # Insert new text at the same position
+                            for inst in text_instances:
+                                try:
+                                    # Get font size from original text
+                                    font_size = 12  # Default
+                                    try:
+                                        text_dict = page.get_text("dict")
+                                        for block in text_dict.get("blocks", []):
+                                            if "lines" in block:
+                                                for line in block["lines"]:
+                                                    for span in line.get("spans", []):
+                                                        if old_text in span.get("text", ""):
+                                                            font_size = span.get("size", 12)
+                                                            break
+                                    except:
+                                        pass  # Use default font size
+                                    
+                                    # Insert new text
+                                    page.insert_text(
+                                        (inst.x0, inst.y0 + font_size),
+                                        new_text,
+                                        fontsize=font_size
+                                    )
+                                    print(f"    Inserted text at ({inst.x0:.1f}, {inst.y0 + font_size:.1f})")
+                                except Exception as e:
+                                    print(f"    Error inserting text: {e}")
+                                    # Continue with other instances
+                        else:
+                            print(f"    Warning: Text '{old_text}' not found on page {page_num + 1}")
             
                 # Save to bytes
                 pdf_bytes = doc.tobytes()
