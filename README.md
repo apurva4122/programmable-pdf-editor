@@ -90,31 +90,37 @@ The frontend will run on `http://localhost:3000`
 
 ## Deployment
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+### Recommended Setup
 
-### Railway Deployment (Recommended)
+- **Frontend**: Deploy to [Vercel](https://vercel.com) (optimized for Next.js)
+- **Backend**: Deploy to [Railway](https://railway.app) (supports Python with system dependencies)
+
+### Frontend Deployment (Vercel)
+
+**Quick Deploy:**
+1. Go to [Vercel](https://vercel.com)
+2. Import your GitHub repository
+3. Set root directory to `frontend`
+4. Add environment variable: `NEXT_PUBLIC_API_URL` → Your Railway backend URL
+5. Deploy
+
+See [VERCEL_DEPLOY.md](./VERCEL_DEPLOY.md) for complete Vercel setup guide.
+
+### Backend Deployment (Railway)
 
 **Quick Deploy:**
 1. Go to [Railway](https://railway.app)
 2. Create new project from GitHub repo
 3. Add backend service (root: `backend`)
-4. Add frontend service (root: `frontend`)
-5. Set environment variables (see [RAILWAY_DEPLOY.md](./RAILWAY_DEPLOY.md))
+4. Set environment variables:
+   - `CORS_ORIGINS`: Your Vercel frontend URL
+5. Deploy
 
 See [RAILWAY_DEPLOY.md](./RAILWAY_DEPLOY.md) for complete Railway setup guide.
 
 ### Alternative Deployments
 
-**Frontend (Vercel):**
-```bash
-cd frontend
-vercel
-```
-
-**Backend (Heroku/DigitalOcean):**
-- Connect GitHub repository
-- Set root directory to `backend`
-- Deploy
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for other deployment options.
 
 ## Development
 
