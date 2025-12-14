@@ -25,30 +25,53 @@ export default function PDFUploader({ onUploaded, onSectionsDetected }: PDFUploa
         const formData = new FormData()
         formData.append('file', file)
 
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        
         try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await axios.post(`${apiUrl}/api/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+            // Step 1: Upload PDF
+            const response = await axios.post(`${apiUrl}/api/upload`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 60000 // 60 second timeout for large files
+            })
 
             const id = response.data.pdf_id
             setPdfId(id)
             setUploadedFile(file.name)
             onUploaded(id)
+            setUploading(false)
 
-      // Automatically process OCR
-      setProcessing(true)
-      const ocrResponse = await axios.post(`${apiUrl}/api/ocr/${id}`)
-      onSectionsDetected(ocrResponse.data.sections)
-      setProcessing(false)
-    } catch (error: any) {
-      console.error('Upload error:', error)
-      const errorMessage = error.response?.data?.detail || error.message || 'Unknown error'
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      alert(`Failed to upload PDF.\n\nError: ${errorMessage}\n\nBackend URL: ${apiUrl}\n\nPlease check:\n1. Backend is running on Railway\n2. CORS_ORIGINS includes your Vercel URL\n3. NEXT_PUBLIC_API_URL is set correctly`)
-    } finally {
-      setUploading(false)
-    }
+            // Step 2: Process OCR
+            try {
+                setProcessing(true)
+                const ocrResponse = await axios.post(`${apiUrl}/api/ocr/${id}`, {}, {
+                    timeout: 300000 // 5 minute timeout for OCR processing
+                })
+                
+                if (ocrResponse.data && ocrResponse.data.sections) {
+                    onSectionsDetected(ocrResponse.data.sections)
+                } else {
+                    console.warn('OCR response missing sections:', ocrResponse.data)
+                    alert('PDF uploaded successfully, but OCR processing returned unexpected format. Please try again.')
+                }
+            } catch (ocrError: any) {
+                console.error('OCR processing error:', ocrError)
+                const ocrErrorMessage = ocrError.response?.data?.detail || ocrError.message || 'Unknown OCR error'
+                alert(`PDF uploaded successfully, but OCR processing failed.\n\nError: ${ocrErrorMessage}\n\nYou can try uploading again or check the backend logs.`)
+            } finally {
+                setProcessing(false)
+            }
+        } catch (error: any) {
+            console.error('Upload error:', error)
+            const errorMessage = error.response?.data?.detail || error.message || 'Unknown error'
+            const isTimeout = error.code === 'ECONNABORTED' || error.message.includes('timeout')
+            
+            if (isTimeout) {
+                alert(`Upload timeout. The file might be too large or the server is taking too long to respond.\n\nBackend URL: ${apiUrl}`)
+            } else {
+                alert(`Failed to upload PDF.\n\nError: ${errorMessage}\n\nBackend URL: ${apiUrl}\n\nPlease check:\n1. Backend is running on Railway\n2. CORS_ORIGINS includes your Vercel URL\n3. NEXT_PUBLIC_API_URL is set correctly`)
+            }
+            setUploading(false)
+        }
     }
 
     return (
