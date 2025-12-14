@@ -5,5 +5,5 @@ nixPkgs = ["python311", "tesseract", "poppler_utils"]
 cmds = ["pip install -r requirements.txt"]
 
 [start]
-cmd = "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "python start_server.py"
 
