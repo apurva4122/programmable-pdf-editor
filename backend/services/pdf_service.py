@@ -45,38 +45,109 @@ class PDFService:
                     
                     for old_text, new_text in replacements.items():
                         print(f"  Searching for: '{old_text}' -> '{new_text}'")
+                        print(f"  Text length: {len(old_text)} characters")
+                        
+                        # Get all text from PDF for comparison
+                        pdf_text_raw = page.get_text()
+                        pdf_text_normalized = " ".join(pdf_text_raw.split())
+                        print(f"  PDF page text preview (first 300 chars): {pdf_text_raw[:300]}")
+                        print(f"  PDF normalized text preview: {pdf_text_normalized[:300]}")
                         
                         # Try multiple search strategies
                         text_instances = []
                         
                         # Strategy 1: Exact match
                         text_instances = page.search_for(old_text)
-                        print(f"    Exact match: Found {len(text_instances)} instances")
+                        print(f"    Strategy 1 - Exact match: Found {len(text_instances)} instances")
                         
-                        # Strategy 2: Try with normalized whitespace
+                        # Strategy 2: Try with normalized whitespace (remove extra spaces/newlines)
                         if not text_instances:
                             normalized_old = " ".join(old_text.split())
                             text_instances = page.search_for(normalized_old)
-                            print(f"    Normalized whitespace: Found {len(text_instances)} instances")
+                            print(f"    Strategy 2 - Normalized whitespace ('{normalized_old}'): Found {len(text_instances)} instances")
                         
-                        # Strategy 3: Try case-insensitive (if available)
+                        # Strategy 3: Try removing all whitespace
+                        if not text_instances:
+                            no_space_old = old_text.replace(" ", "").replace("\n", "").replace("\t", "")
+                            no_space_pdf = pdf_text_raw.replace(" ", "").replace("\n", "").replace("\t", "")
+                            if no_space_old in no_space_pdf:
+                                # Found without spaces, now try to find with minimal spaces
+                                # Try each word separately and find overlapping regions
+                                words = old_text.split()
+                                if len(words) > 0:
+                                    # Try searching for first word, then check if subsequent words are nearby
+                                    first_word_instances = page.search_for(words[0])
+                                    if first_word_instances:
+                                        print(f"    Strategy 3 - Found first word '{words[0]}' {len(first_word_instances)} times")
+                                        # For now, use first word instances as approximation
+                                        text_instances = first_word_instances[:1]  # Take first instance
+                                        print(f"    Using first word as approximation")
+                        
+                        # Strategy 4: Try case-insensitive variations
                         if not text_instances:
                             try:
-                                # Try uppercase version
                                 text_instances = page.search_for(old_text.upper())
                                 if not text_instances:
                                     text_instances = page.search_for(old_text.lower())
-                                print(f"    Case-insensitive: Found {len(text_instances)} instances")
+                                if not text_instances:
+                                    text_instances = page.search_for(old_text.capitalize())
+                                print(f"    Strategy 4 - Case-insensitive: Found {len(text_instances)} instances")
                             except:
                                 pass
                         
-                        # Strategy 4: Try partial match (first few words)
+                        # Strategy 5: Try partial match (first few words or longest word)
                         if not text_instances:
                             words = old_text.split()
                             if len(words) > 0:
-                                partial = words[0] if len(words[0]) > 3 else " ".join(words[:2])
-                                text_instances = page.search_for(partial)
-                                print(f"    Partial match ('{partial}'): Found {len(text_instances)} instances")
+                                # Try longest word (likely most unique)
+                                longest_word = max(words, key=len)
+                                if len(longest_word) > 3:
+                                    text_instances = page.search_for(longest_word)
+                                    print(f"    Strategy 5 - Longest word ('{longest_word}'): Found {len(text_instances)} instances")
+                                
+                                # If still not found, try first word
+                                if not text_instances and len(words[0]) > 2:
+                                    text_instances = page.search_for(words[0])
+                                    print(f"    Strategy 5 - First word ('{words[0]}'): Found {len(text_instances)} instances")
+                        
+                        # Strategy 6: Try searching for individual characters/numbers (for invoice numbers, etc.)
+                        if not text_instances:
+                            # If text looks like a number or code, try searching for it as-is
+                            if old_text.strip().isdigit() or any(c.isdigit() for c in old_text):
+                                # Try with and without spaces around numbers
+                                for variant in [old_text.strip(), old_text.replace(" ", ""), old_text.replace("-", "")]:
+                                    text_instances = page.search_for(variant)
+                                    if text_instances:
+                                        print(f"    Strategy 6 - Number variant ('{variant}'): Found {len(text_instances)} instances")
+                                        break
+                        
+                        # Strategy 7: Fuzzy match - check if text exists in page text (case-insensitive)
+                        if not text_instances:
+                            old_lower = old_text.lower().strip()
+                            pdf_lower = pdf_text_raw.lower()
+                            if old_lower in pdf_lower:
+                                print(f"    Strategy 7 - Text found in page text (case-insensitive) but search_for failed")
+                                print(f"    This suggests a formatting/encoding mismatch")
+                                # Try to extract position from text blocks
+                                try:
+                                    text_dict = page.get_text("dict")
+                                    for block in text_dict.get("blocks", []):
+                                        if "lines" in block:
+                                            for line in block["lines"]:
+                                                line_text = "".join([span.get("text", "") for span in line.get("spans", [])])
+                                                if old_lower in line_text.lower():
+                                                    # Found matching line, get its bbox
+                                                    bbox = line.get("bbox", [])
+                                                    if len(bbox) == 4:
+                                                        text_instances = [fitz.Rect(bbox)]
+                                                        print(f"    Strategy 7 - Found via text dict bbox: {bbox}")
+                                                        break
+                                                if text_instances:
+                                                    break
+                                        if text_instances:
+                                            break
+                                except Exception as e:
+                                    print(f"    Strategy 7 - Error extracting bbox: {e}")
                         
                         if text_instances:
                             print(f"  ✓ Found {len(text_instances)} instances to replace")
@@ -211,14 +282,80 @@ class PDFService:
                                     print(f"    Traceback: {traceback.format_exc()}")
                         else:
                             print(f"    ✗ Text '{old_text}' not found on page {page_num + 1}")
+                            print(f"    ===== DEBUGGING INFO =====")
+                            print(f"    Original text to find: '{old_text}'")
+                            print(f"    Text length: {len(old_text)}")
+                            print(f"    PDF page text length: {len(pdf_text_raw)}")
+                            
                             # Show what text is actually on the page for debugging
-                            if old_text.lower() in page_text.lower():
-                                print(f"    Note: Similar text found (case-insensitive match)")
-                            # Check for partial matches
-                            words = old_text.split()
-                            found_words = [w for w in words if w.lower() in page_text.lower()]
-                            if found_words:
-                                print(f"    Note: Found words: {found_words}")
+                            old_lower = old_text.lower().strip()
+                            pdf_lower = pdf_text_raw.lower()
+                            
+                            if old_lower in pdf_lower:
+                                print(f"    ✓ Text EXISTS in page (case-insensitive match)")
+                                print(f"    This means search_for() failed due to formatting differences")
+                                # Try to find the position manually
+                                idx = pdf_lower.find(old_lower)
+                                print(f"    Found at character position {idx} in page text")
+                                
+                                # Try to get text blocks and find matching one
+                                try:
+                                    text_dict = page.get_text("dict")
+                                    print(f"    Attempting to find text via text blocks...")
+                                    for block_idx, block in enumerate(text_dict.get("blocks", [])):
+                                        if "lines" in block:
+                                            for line_idx, line in enumerate(block["lines"]):
+                                                line_text_parts = []
+                                                for span in line.get("spans", []):
+                                                    span_text = span.get("text", "")
+                                                    line_text_parts.append(span_text)
+                                                line_text = "".join(line_text_parts)
+                                                
+                                                if old_lower in line_text.lower():
+                                                    bbox = line.get("bbox", [])
+                                                    if len(bbox) == 4:
+                                                        print(f"    Found matching line in block {block_idx}, line {line_idx}")
+                                                        print(f"    Line text: '{line_text[:100]}'")
+                                                        print(f"    Line bbox: {bbox}")
+                                                        # Use this bbox as the replacement area
+                                                        text_instances = [fitz.Rect(bbox)]
+                                                        print(f"    ✓ Created rect from text block bbox")
+                                                        break
+                                                if text_instances:
+                                                    break
+                                        if text_instances:
+                                            break
+                                except Exception as e:
+                                    print(f"    Error in text block search: {e}")
+                                    import traceback
+                                    print(traceback.format_exc())
+                            else:
+                                print(f"    ✗ Text does NOT exist in page (even case-insensitive)")
+                                # Check for partial matches
+                                words = old_text.split()
+                                found_words = [w for w in words if w.lower() in pdf_lower and len(w) > 2]
+                                if found_words:
+                                    print(f"    Note: Some words found: {found_words}")
+                                else:
+                                    print(f"    Note: No matching words found")
+                                    
+                                # Show similar text snippets
+                                print(f"    Showing similar text snippets from PDF:")
+                                for word in words[:3]:  # Check first 3 words
+                                    if len(word) > 3:
+                                        # Find this word in PDF and show context
+                                        word_lower = word.lower()
+                                        if word_lower in pdf_lower:
+                                            idx = pdf_lower.find(word_lower)
+                                            context = pdf_text_raw[max(0, idx-50):min(len(pdf_text_raw), idx+len(word)+50)]
+                                            print(f"      Found '{word}' in context: ...{context}...")
+                            
+                            print(f"    ===== END DEBUGGING =====")
+                            
+                            # If we still don't have instances, skip this replacement
+                            if not text_instances:
+                                print(f"    ⚠ SKIPPING replacement for '{old_text}' - text not found")
+                                continue
             
                 # Save to bytes
                 pdf_bytes = doc.tobytes()
