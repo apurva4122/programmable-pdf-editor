@@ -135,7 +135,12 @@ async def generate_pdfs(request: GenerationRequest):
         print(f"PDF file found: {file_path}")
         
         # Convert Pydantic models to dicts for the service
-        rules_dict = [rule.dict() for rule in request.rules]
+        # Use model_dump() for Pydantic v2, fallback to dict() for v1
+        try:
+            rules_dict = [rule.model_dump() if hasattr(rule, 'model_dump') else rule.dict() for rule in request.rules]
+        except Exception as e:
+            print(f"Error converting rules to dict: {e}")
+            rules_dict = [rule.dict() for rule in request.rules]
         
         # Generate PDFs
         print("Starting PDF generation...")
