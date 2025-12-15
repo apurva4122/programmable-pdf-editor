@@ -150,18 +150,42 @@ class PDFService:
                             for idx, font_info in enumerate(font_info_list):
                                 try:
                                     # Calculate insertion point
-                                    # Use y1 (bottom) as baseline, then subtract font_size to position text
+                                    # PyMuPDF uses bottom-left as origin, so we need to position carefully
+                                    # The y coordinate in PDFs increases from bottom to top
+                                    # After redaction, we insert at the original position
                                     insert_x = font_info['x0']
-                                    insert_y = font_info['y1'] - 2  # Slightly above bottom line
+                                    # Use y1 (bottom of text) as baseline for insertion
+                                    # Adjust slightly to account for font descent
+                                    insert_y = font_info['y1'] - (font_info['font_size'] * 0.2)  # Position near baseline
                                     
-                                    # Insert new text
-                                    page.insert_text(
-                                        (insert_x, insert_y),
-                                        new_text,
-                                        fontsize=font_info['font_size'],
-                                        fontname=font_info['font_name']
-                                    )
-                                    print(f"    ✓ Inserted '{new_text}' at ({insert_x:.1f}, {insert_y:.1f}) with font size {font_info['font_size']}")
+                                    # Try to insert text - use insertText which is more reliable
+                                    try:
+                                        # Method 1: Use insert_text (simpler)
+                                        page.insert_text(
+                                            (insert_x, insert_y),
+                                            new_text,
+                                            fontsize=font_info['font_size'],
+                                            fontname=font_info['font_name'],
+                                            color=(0, 0, 0)  # Black color
+                                        )
+                                        print(f"    ✓ Inserted '{new_text}' at ({insert_x:.1f}, {insert_y:.1f}) with font size {font_info['font_size']}, font '{font_info['font_name']}'")
+                                    except Exception as insert_error:
+                                        print(f"    insert_text failed: {insert_error}, trying alternative method")
+                                        # Method 2: Use text insertion with TextWriter
+                                        try:
+                                            from fitz import TextWriter
+                                            writer = TextWriter(page.rect)
+                                            writer.append(
+                                                (insert_x, insert_y),
+                                                new_text,
+                                                fontsize=font_info['font_size'],
+                                                fontname=font_info['font_name']
+                                            )
+                                            writer.write_text(page)
+                                            print(f"    ✓ Inserted '{new_text}' using TextWriter")
+                                        except Exception as writer_error:
+                                            print(f"    TextWriter also failed: {writer_error}")
+                                            raise insert_error
                                 except Exception as e:
                                     print(f"    ✗ Error inserting text for instance {idx + 1}: {e}")
                                     import traceback
@@ -181,6 +205,25 @@ class PDFService:
                 pdf_bytes = doc.tobytes()
                 doc.close()
                 print(f"PDF replacement complete, size: {len(pdf_bytes)} bytes")
+                
+                # Verify replacements were made by checking the output
+                if pdf_bytes:
+                    verify_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    verify_text = ""
+                    for page in verify_doc:
+                        verify_text += page.get_text()
+                    verify_doc.close()
+                    print(f"Verification: Output PDF contains {len(verify_text)} characters")
+                    # Check if new text appears in output
+                    for old_text, new_text in replacements.items():
+                        if new_text in verify_text:
+                            print(f"  ✓ Verified: '{new_text}' found in output PDF")
+                        else:
+                            print(f"  ⚠ Warning: '{new_text}' NOT found in output PDF")
+                            # Check if old text still exists (replacement failed)
+                            if old_text in verify_text:
+                                print(f"  ⚠ Warning: Original text '{old_text}' still present (replacement may have failed)")
+                
                 return pdf_bytes
             except Exception as e:
                 print(f"PyMuPDF replacement failed: {e}")
