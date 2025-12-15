@@ -5,7 +5,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 try:
     import fitz  # PyMuPDF for better text replacement
@@ -17,10 +17,12 @@ class PDFService:
     def __init__(self):
         pass
     
-    def replace_text_in_pdf(self, pdf_path: Path, replacements: Dict[str, str]) -> bytes:
+    def replace_text_in_pdf(self, pdf_path: Path, replacements: Dict[str, str], ocr_coordinates: Optional[Dict[str, Dict]] = None) -> bytes:
         """
         Replace text in PDF using PyMuPDF for better text replacement
         replacements: dict mapping original text to new text
+        ocr_coordinates: optional dict mapping original_text to OCR bounding box coordinates
+                         Format: {"text": {"x": x, "y": y, "width": w, "height": h, "page": page_num}}
         """
         if not replacements:
             print("Warning: No replacements provided, returning original PDF")
@@ -28,6 +30,8 @@ class PDFService:
                 return f.read()
         
         print(f"Replacing {len(replacements)} text strings in PDF")
+        if ocr_coordinates:
+            print(f"Using OCR coordinates for {len(ocr_coordinates)} text items")
         
         if PYMUPDF_AVAILABLE:
             try:
@@ -46,6 +50,41 @@ class PDFService:
                     for old_text, new_text in replacements.items():
                         print(f"  Searching for: '{old_text}' -> '{new_text}'")
                         print(f"  Text length: {len(old_text)} characters")
+                        
+                        # Check if we have OCR coordinates for this text
+                        text_instances = []
+                        if ocr_coordinates and old_text in ocr_coordinates:
+                            coord_info = ocr_coordinates[old_text]
+                            if coord_info.get("page") == page_num:
+                                # Convert OCR coordinates to PDF coordinates
+                                # OCR coordinates are typically in pixels from top-left
+                                # PDF coordinates are in points (72 DPI) from bottom-left
+                                try:
+                                    ocr_x = coord_info.get("x", 0)
+                                    ocr_y = coord_info.get("y", 0)
+                                    ocr_width = coord_info.get("width", 100)
+                                    ocr_height = coord_info.get("height", 20)
+                                    
+                                    # Get page dimensions
+                                    page_rect = page.rect
+                                    page_height = page_rect.height
+                                    
+                                    # Convert OCR coordinates (top-left origin) to PDF coordinates (bottom-left origin)
+                                    # Assuming OCR image is same size as PDF page
+                                    pdf_x0 = ocr_x
+                                    pdf_y0 = page_height - (ocr_y + ocr_height)  # Flip Y coordinate
+                                    pdf_x1 = ocr_x + ocr_width
+                                    pdf_y1 = page_height - ocr_y
+                                    
+                                    text_rect = fitz.Rect(pdf_x0, pdf_y0, pdf_x1, pdf_y1)
+                                    text_instances = [text_rect]
+                                    print(f"    ✓ Using OCR coordinates: ({pdf_x0:.1f}, {pdf_y0:.1f}) to ({pdf_x1:.1f}, {pdf_y1:.1f})")
+                                except Exception as coord_error:
+                                    print(f"    Error converting OCR coordinates: {coord_error}")
+                                    text_instances = []
+                        
+                        # If OCR coordinates didn't work, try text search
+                        if not text_instances:
                         
                         # Get all text from PDF for comparison
                         pdf_text_raw = page.get_text()

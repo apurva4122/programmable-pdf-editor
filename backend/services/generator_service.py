@@ -56,7 +56,8 @@ class GeneratorService:
         self,
         pdf_path: Path,
         rules: List[Dict],
-        num_copies: int
+        num_copies: int,
+        ocr_sections: Optional[List[Dict]] = None
     ) -> List[Path]:
         """Generate multiple PDF copies with replacements"""
         output_files = []
@@ -80,9 +81,29 @@ class GeneratorService:
                 if not replacements:
                     print(f"Warning: No replacements generated for copy {copy_num + 1}")
                 
+                # Build OCR coordinates map if available
+                ocr_coords = None
+                if ocr_sections:
+                    ocr_coords = {}
+                    for rule in rules:
+                        original_text = rule.get("original_text", "")
+                        section_id = rule.get("section_id", "")
+                        # Find matching OCR section
+                        for section in ocr_sections:
+                            if section.get("id") == section_id or section.get("text", "").strip() == original_text.strip():
+                                ocr_coords[original_text] = {
+                                    "x": section.get("x", 0),
+                                    "y": section.get("y", 0),
+                                    "width": section.get("width", 100),
+                                    "height": section.get("height", 20),
+                                    "page": section.get("page", 0)
+                                }
+                                print(f"  Found OCR coordinates for '{original_text}': page {section.get('page', 0)}, ({section.get('x', 0)}, {section.get('y', 0)})")
+                                break
+                
                 # Generate PDF with replacements
                 print(f"  Replacing text in PDF...")
-                pdf_bytes = self.pdf_service.replace_text_in_pdf(pdf_path, replacements)
+                pdf_bytes = self.pdf_service.replace_text_in_pdf(pdf_path, replacements, ocr_coords)
                 
                 # Save to file
                 output_path = self.output_dir / f"{pdf_path.stem}_copy_{copy_num + 1}.pdf"

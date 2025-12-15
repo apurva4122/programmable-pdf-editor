@@ -32,12 +32,18 @@ export default function PDFGenerator({
 
         try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      // Include OCR sections that match the rules for coordinate-based replacement
+      const matchingSections = sections.filter(section => 
+        rules.some(rule => rule.section_id === section.id)
+      )
+      
       const response = await axios.post(
         `${apiUrl}/api/generate`,
                 {
                     pdf_id: pdfId,
                     rules: rules,
-                    num_copies: numCopies
+                    num_copies: numCopies,
+                    ocr_sections: matchingSections  // Include OCR coordinates
                 },
                 {
                     responseType: 'blob',

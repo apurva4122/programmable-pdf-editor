@@ -73,6 +73,7 @@ class GenerationRequest(BaseModel):
     pdf_id: str
     rules: List[ReplacementRule]
     num_copies: int
+    ocr_sections: Optional[List[TextSection]] = None  # Include OCR sections for coordinate-based replacement
 
 
 @app.get("/")
