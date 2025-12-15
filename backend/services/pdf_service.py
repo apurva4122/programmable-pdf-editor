@@ -147,45 +147,64 @@ class PDFService:
                                 print(traceback.format_exc())
                             
                             # Insert new text at the redacted positions
+                            # IMPORTANT: After apply_redactions(), we need to insert text as new content
                             for idx, font_info in enumerate(font_info_list):
                                 try:
                                     # Calculate insertion point
-                                    # PyMuPDF uses bottom-left as origin, so we need to position carefully
-                                    # The y coordinate in PDFs increases from bottom to top
-                                    # After redaction, we insert at the original position
+                                    # PyMuPDF coordinate system: origin at bottom-left
+                                    # y1 is the bottom of the text box, y0 is the top
                                     insert_x = font_info['x0']
-                                    # Use y1 (bottom of text) as baseline for insertion
-                                    # Adjust slightly to account for font descent
-                                    insert_y = font_info['y1'] - (font_info['font_size'] * 0.2)  # Position near baseline
+                                    # Position text at baseline (slightly above y1 to account for font descent)
+                                    # Most fonts have about 20% descent, so we position slightly above y1
+                                    insert_y = font_info['y1'] - (font_info['font_size'] * 0.15)
                                     
-                                    # Try to insert text - use insertText which is more reliable
+                                    print(f"    Attempting to insert '{new_text}' at ({insert_x:.2f}, {insert_y:.2f})")
+                                    print(f"    Original rect: x0={font_info['x0']:.2f}, y0={font_info['y0']:.2f}, y1={font_info['y1']:.2f}")
+                                    
+                                    # Method 1: Use insert_text with explicit rendering
                                     try:
-                                        # Method 1: Use insert_text (simpler)
-                                        page.insert_text(
+                                        # Insert text directly
+                                        rc = page.insert_text(
                                             (insert_x, insert_y),
                                             new_text,
                                             fontsize=font_info['font_size'],
                                             fontname=font_info['font_name'],
-                                            color=(0, 0, 0)  # Black color
+                                            color=(0, 0, 0),  # Black color
+                                            render_mode=0  # Fill text
                                         )
+                                        print(f"    ✓ insert_text returned: {rc}")
                                         print(f"    ✓ Inserted '{new_text}' at ({insert_x:.1f}, {insert_y:.1f}) with font size {font_info['font_size']}, font '{font_info['font_name']}'")
                                     except Exception as insert_error:
-                                        print(f"    insert_text failed: {insert_error}, trying alternative method")
-                                        # Method 2: Use text insertion with TextWriter
+                                        print(f"    insert_text failed: {insert_error}")
+                                        # Method 2: Try using TextWriter (more control)
                                         try:
                                             from fitz import TextWriter
-                                            writer = TextWriter(page.rect)
-                                            writer.append(
+                                            tw = TextWriter(page.rect)
+                                            tw.append(
                                                 (insert_x, insert_y),
                                                 new_text,
                                                 fontsize=font_info['font_size'],
                                                 fontname=font_info['font_name']
                                             )
-                                            writer.write_text(page)
+                                            tw.write_text(page)
                                             print(f"    ✓ Inserted '{new_text}' using TextWriter")
                                         except Exception as writer_error:
-                                            print(f"    TextWriter also failed: {writer_error}")
-                                            raise insert_error
+                                            print(f"    TextWriter failed: {writer_error}")
+                                            # Method 3: Try inserting as annotation (last resort)
+                                            try:
+                                                annot = page.add_freetext_annot(
+                                                    fitz.Rect(insert_x, insert_y - font_info['font_size'], 
+                                                             insert_x + len(new_text) * font_info['font_size'] * 0.6, 
+                                                             insert_y),
+                                                    new_text,
+                                                    fontsize=font_info['font_size'],
+                                                    fontname=font_info['font_name']
+                                                )
+                                                annot.update()
+                                                print(f"    ✓ Inserted '{new_text}' as annotation")
+                                            except Exception as annot_error:
+                                                print(f"    All insertion methods failed. Last error: {annot_error}")
+                                                raise insert_error
                                 except Exception as e:
                                     print(f"    ✗ Error inserting text for instance {idx + 1}: {e}")
                                     import traceback
