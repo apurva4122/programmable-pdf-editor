@@ -10,8 +10,6 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Card } from '@/components/ui/card'
 
-import { TextSection } from '../page'
-
 interface PDFGeneratorProps {
     pdfId: string
     rules: ReplacementRule[]
