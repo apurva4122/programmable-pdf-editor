@@ -10,10 +10,13 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Card } from '@/components/ui/card'
 
+import { TextSection } from '../page'
+
 interface PDFGeneratorProps {
     pdfId: string
     rules: ReplacementRule[]
     numCopies: number
+    sections: TextSection[]
     onNumCopiesChange: (num: number) => void
 }
 
@@ -21,6 +24,7 @@ export default function PDFGenerator({
     pdfId,
     rules,
     numCopies,
+    sections,
     onNumCopiesChange
 }: PDFGeneratorProps) {
     const [generating, setGenerating] = useState(false)

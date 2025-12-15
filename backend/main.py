@@ -149,12 +149,23 @@ async def generate_pdfs(request: GenerationRequest):
             print(f"Error converting rules to dict: {e}")
             rules_dict = [rule.dict() for rule in request.rules]
         
+        # Convert OCR sections to dicts if provided
+        ocr_sections_dict = None
+        if request.ocr_sections:
+            try:
+                ocr_sections_dict = [section.model_dump() if hasattr(section, 'model_dump') else section.dict() for section in request.ocr_sections]
+                print(f"Received {len(ocr_sections_dict)} OCR sections for coordinate-based replacement")
+            except Exception as e:
+                print(f"Error converting OCR sections to dict: {e}")
+                ocr_sections_dict = [section.dict() for section in request.ocr_sections] if request.ocr_sections else None
+        
         # Generate PDFs
         print("Starting PDF generation...")
         output_files = await generator_service.generate_pdfs(
             file_path,
             rules_dict,
-            request.num_copies
+            request.num_copies,
+            ocr_sections_dict
         )
         print(f"Generated {len(output_files)} PDF files")
         

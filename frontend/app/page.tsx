@@ -136,6 +136,7 @@ export default function Home() {
                                     pdfId={pdfId!}
                                     rules={rules}
                                     numCopies={numCopies}
+                                    sections={sections}
                                     onNumCopiesChange={setNumCopies}
                                 />
                             </CardContent>
