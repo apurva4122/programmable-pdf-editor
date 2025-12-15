@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import axios from 'axios'
-import { ReplacementRule } from '../page'
+import { ReplacementRule, TextSection } from '../page'
 import { saveAs } from 'file-saver'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
