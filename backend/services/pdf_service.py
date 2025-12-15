@@ -81,17 +81,50 @@ class PDFService:
                         if text_instances:
                             print(f"  ✓ Found {len(text_instances)} instances to replace")
                             
-                            # Store original positions before redaction
-                            original_positions = []
+                            # Get font info BEFORE redaction (while text still exists)
+                            font_info_list = []
                             for inst in text_instances:
-                                original_positions.append({
-                                    'x0': inst.x0,
-                                    'y0': inst.y0,
-                                    'x1': inst.x1,
-                                    'y1': inst.y1,
-                                    'width': inst.x1 - inst.x0,
-                                    'height': inst.y1 - inst.y0
-                                })
+                                try:
+                                    # Get text at this location to extract font info
+                                    rect = fitz.Rect(inst)
+                                    text_dict = page.get_text("dict")
+                                    
+                                    font_size = 12
+                                    font_name = "helv"
+                                    
+                                    # Find font info for this text instance
+                                    for block in text_dict.get("blocks", []):
+                                        if "lines" in block:
+                                            for line in block["lines"]:
+                                                for span in line.get("spans", []):
+                                                    span_bbox = span.get("bbox", [])
+                                                    if len(span_bbox) == 4:
+                                                        # Check if span overlaps with our rect
+                                                        span_rect = fitz.Rect(span_bbox)
+                                                        if rect.intersects(span_rect):
+                                                            font_size = span.get("size", 12)
+                                                            font_name = span.get("font", "helv")
+                                                            break
+                                    
+                                    font_info_list.append({
+                                        'rect': rect,
+                                        'font_size': font_size,
+                                        'font_name': font_name,
+                                        'x0': inst.x0,
+                                        'y0': inst.y0,
+                                        'y1': inst.y1
+                                    })
+                                    print(f"    Instance font: size={font_size}, name={font_name}")
+                                except Exception as e:
+                                    print(f"    Could not get font info: {e}")
+                                    font_info_list.append({
+                                        'rect': fitz.Rect(inst),
+                                        'font_size': 12,
+                                        'font_name': 'helv',
+                                        'x0': inst.x0,
+                                        'y0': inst.y0,
+                                        'y1': inst.y1
+                                    })
                             
                             # Add redaction annotations
                             redaction_count = 0
@@ -104,7 +137,7 @@ class PDFService:
                             
                             print(f"  Added {redaction_count} redaction annotations")
                             
-                            # Apply redactions
+                            # Apply redactions (this removes the text)
                             try:
                                 page.apply_redactions()
                                 print(f"  ✓ Applied redactions")
@@ -113,42 +146,22 @@ class PDFService:
                                 import traceback
                                 print(traceback.format_exc())
                             
-                            # Insert new text at original positions
-                            for idx, pos in enumerate(original_positions):
+                            # Insert new text at the redacted positions
+                            for idx, font_info in enumerate(font_info_list):
                                 try:
-                                    # Get font size from page text blocks
-                                    font_size = 12  # Default
-                                    font_name = "helv"  # Default font
-                                    
-                                    try:
-                                        text_dict = page.get_text("dict")
-                                        for block in text_dict.get("blocks", []):
-                                            if "lines" in block:
-                                                for line in block["lines"]:
-                                                    for span in line.get("spans", []):
-                                                        span_bbox = span.get("bbox", [])
-                                                        if len(span_bbox) == 4:
-                                                            # Check if span overlaps with our position
-                                                            if (pos['x0'] <= span_bbox[2] and pos['x1'] >= span_bbox[0] and
-                                                                pos['y0'] <= span_bbox[3] and pos['y1'] >= span_bbox[1]):
-                                                                font_size = span.get("size", 12)
-                                                                font_name = span.get("font", "helv")
-                                                                break
-                                    except Exception as e:
-                                        print(f"    Could not extract font info: {e}")
-                                    
-                                    # Calculate insertion point (center-left of the original text)
-                                    insert_x = pos['x0']
-                                    insert_y = pos['y0'] + font_size  # Position text at baseline
+                                    # Calculate insertion point
+                                    # Use y1 (bottom) as baseline, then subtract font_size to position text
+                                    insert_x = font_info['x0']
+                                    insert_y = font_info['y1'] - 2  # Slightly above bottom line
                                     
                                     # Insert new text
                                     page.insert_text(
                                         (insert_x, insert_y),
                                         new_text,
-                                        fontsize=font_size,
-                                        fontname=font_name
+                                        fontsize=font_info['font_size'],
+                                        fontname=font_info['font_name']
                                     )
-                                    print(f"    ✓ Inserted '{new_text}' at ({insert_x:.1f}, {insert_y:.1f}) with font size {font_size}")
+                                    print(f"    ✓ Inserted '{new_text}' at ({insert_x:.1f}, {insert_y:.1f}) with font size {font_info['font_size']}")
                                 except Exception as e:
                                     print(f"    ✗ Error inserting text for instance {idx + 1}: {e}")
                                     import traceback
