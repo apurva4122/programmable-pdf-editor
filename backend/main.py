@@ -79,8 +79,14 @@ class GenerationRequest(BaseModel):
 async def root():
     return {
         "message": "Programmable PDF Editor API",
-        "cors_origins": os.getenv("CORS_ORIGINS", "NOT SET")
+        "cors_origins": os.getenv("CORS_ORIGINS", "NOT SET"),
+        "routes": [{"path": route.path, "methods": list(route.methods) if hasattr(route, 'methods') else []} for route in app.routes if hasattr(route, 'path')]
     }
+
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {"status": "ok", "service": "Programmable PDF Editor API"}
 
 
 @app.post("/api/upload")
