@@ -1,6 +1,6 @@
 import random
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 import zipfile
 import asyncio
 from services.pdf_service import PDFService
