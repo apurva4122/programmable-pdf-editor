@@ -92,11 +92,11 @@ class PDFService:
                             print(f"  PDF normalized text preview: {pdf_text_normalized[:300]}")
                             
                             # Try multiple search strategies
-                        
-                        # Strategy 1: Exact match
-                        text_instances = page.search_for(old_text)
-                        print(f"    Strategy 1 - Exact match: Found {len(text_instances)} instances")
-                        
+                            
+                            # Strategy 1: Exact match
+                            text_instances = page.search_for(old_text)
+                            print(f"    Strategy 1 - Exact match: Found {len(text_instances)} instances")
+                            
                             # Strategy 2: Try with normalized whitespace (remove extra spaces/newlines)
                             if not text_instances:
                                 normalized_old = " ".join(old_text.split())
