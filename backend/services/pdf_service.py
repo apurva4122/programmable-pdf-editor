@@ -94,9 +94,15 @@ class PDFService:
                                     
                                     # Step 2: Convert from top-left origin to bottom-left origin
                                     # In PDF: y=0 is at bottom, y=page_height is at top
+                                    # OCR: y=0 at top, increases downward
+                                    # PDF: y=0 at bottom, increases upward
                                     # So: pdf_y = page_height - ocr_y_scaled
-                                    pdf_y1 = page_height_pt - ocr_y_top_pt  # Top of text box in PDF coordinates (larger y value)
-                                    pdf_y0 = page_height_pt - ocr_y_bottom_pt  # Bottom of text box in PDF coordinates (smaller y value)
+                                    # 
+                                    # IMPORTANT: We need to flip BOTH top and bottom
+                                    # OCR top (smaller y in OCR) -> PDF bottom (smaller y in PDF)
+                                    # OCR bottom (larger y in OCR) -> PDF top (larger y in PDF)
+                                    pdf_y0 = page_height_pt - ocr_y_bottom_pt  # Bottom of text box in PDF (was OCR bottom)
+                                    pdf_y1 = page_height_pt - ocr_y_top_pt  # Top of text box in PDF (was OCR top)
                                     
                                     pdf_x1 = pdf_x0 + pdf_width
                                     
@@ -349,25 +355,50 @@ class PDFService:
                                     })
                                     print(f"    Fallback font size: {final_size:.1f} (estimated: {estimated_size:.1f})")
                             
-                            # Add redaction annotations
+                            # Add redaction annotations and apply them
                             redaction_count = 0
                             for inst in text_instances:
                                 try:
-                                    page.add_redact_annot(inst)
+                                    # Create redaction annotation
+                                    redact_annot = page.add_redact_annot(inst)
+                                    # Fill with white color to hide the text
+                                    redact_annot.set_colors(stroke=(1, 1, 1), fill=(1, 1, 1))  # White
+                                    redact_annot.update()
                                     redaction_count += 1
+                                    print(f"    Added redaction annotation at ({inst.x0:.1f}, {inst.y0:.1f}) to ({inst.x1:.1f}, {inst.y1:.1f})")
                                 except Exception as e:
                                     print(f"    Warning: Could not add redaction: {e}")
+                                    import traceback
+                                    print(traceback.format_exc())
                             
                             print(f"  Added {redaction_count} redaction annotations")
                             
                             # Apply redactions (this removes the text)
                             try:
-                                page.apply_redactions()
+                                # Apply redactions with image parameter to ensure text is removed
+                                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)  # Remove text, don't add image
                                 print(f"  ✓ Applied redactions")
+                                
+                                # Verify text was removed
+                                page_text_after = page.get_text()
+                                if old_text in page_text_after:
+                                    print(f"  ⚠ Warning: Text '{old_text}' still present after redaction!")
+                                else:
+                                    print(f"  ✓ Verified: Text '{old_text}' removed successfully")
                             except Exception as e:
                                 print(f"    Error: Redaction failed: {e}")
                                 import traceback
                                 print(traceback.format_exc())
+                                # Try alternative: manually draw white rectangle
+                                try:
+                                    print(f"    Attempting manual text removal with white rectangle...")
+                                    for inst in text_instances:
+                                        # Draw white rectangle to cover the text
+                                        rect = fitz.Rect(inst)
+                                        page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1), width=0)
+                                    print(f"    ✓ Drew white rectangles to cover text")
+                                except Exception as manual_error:
+                                    print(f"    Manual removal also failed: {manual_error}")
                             
                             # Insert new text at the redacted positions
                             # IMPORTANT: After apply_redactions(), we need to insert text as new content
