@@ -201,9 +201,11 @@ async def generate_pdfs(request: GenerationRequest):
         
         # If only 1 copy, return the PDF directly instead of creating a zip
         if request.num_copies == 1 and len(output_files) == 1:
-            print("Only 1 copy generated, returning PDF directly (no zip)")
+            print(f"Only 1 copy generated, returning PDF directly (no zip): {output_files[0]}")
+            if not output_files[0].exists():
+                raise HTTPException(status_code=500, detail=f"Generated PDF file not found: {output_files[0]}")
             return FileResponse(
-                output_files[0],
+                str(output_files[0]),
                 media_type="application/pdf",
                 filename=f"generated_{request.pdf_id}_copy_1.pdf"
             )

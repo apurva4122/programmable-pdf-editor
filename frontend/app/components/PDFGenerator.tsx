@@ -60,9 +60,19 @@ export default function PDFGenerator({
                 }
             )
 
-            // Download the zip file
-            const blob = new Blob([response.data], { type: 'application/zip' })
-            saveAs(blob, `generated_pdfs_${pdfId}.zip`)
+            // Check if it's a single PDF or a zip file based on content type
+            const contentType = response.headers['content-type'] || ''
+            const isZip = contentType.includes('application/zip') || numCopies > 1
+            
+            if (isZip) {
+                // Download the zip file
+                const blob = new Blob([response.data], { type: 'application/zip' })
+                saveAs(blob, `generated_pdfs_${pdfId}.zip`)
+            } else {
+                // Download the single PDF file
+                const blob = new Blob([response.data], { type: 'application/pdf' })
+                saveAs(blob, `generated_${pdfId}_copy_1.pdf`)
+            }
 
             alert(`Successfully generated ${numCopies} PDF copies!`)
         } catch (error: any) {
