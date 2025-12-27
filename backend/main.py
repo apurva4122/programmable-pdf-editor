@@ -43,9 +43,39 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Initialize services
-ocr_service = OCRService()
-pdf_service = PDFService()
-generator_service = GeneratorService()
+print("Initializing services...")
+try:
+    ocr_service = OCRService()
+    print("OCR service initialized")
+except Exception as e:
+    print(f"Error initializing OCR service: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
+
+try:
+    pdf_service = PDFService()
+    print("PDF service initialized")
+except Exception as e:
+    print(f"Error initializing PDF service: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
+
+try:
+    generator_service = GeneratorService()
+    print("Generator service initialized")
+except Exception as e:
+    print(f"Error initializing Generator service: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
+
+# Log all registered routes
+print("Registered routes:")
+for route in app.routes:
+    if hasattr(route, 'path') and hasattr(route, 'methods'):
+        print(f"  {list(route.methods)} {route.path}")
 
 
 class TextSection(BaseModel):
