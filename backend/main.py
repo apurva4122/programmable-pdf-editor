@@ -199,7 +199,16 @@ async def generate_pdfs(request: GenerationRequest):
         )
         print(f"Generated {len(output_files)} PDF files")
         
-        # Create zip file with all generated PDFs
+        # If only 1 copy, return the PDF directly instead of creating a zip
+        if request.num_copies == 1 and len(output_files) == 1:
+            print("Only 1 copy generated, returning PDF directly (no zip)")
+            return FileResponse(
+                output_files[0],
+                media_type="application/pdf",
+                filename=f"generated_{request.pdf_id}_copy_1.pdf"
+            )
+        
+        # Create zip file with all generated PDFs (for 2+ copies)
         print("Creating ZIP file...")
         zip_path = await generator_service.create_zip(output_files, request.pdf_id)
         print(f"ZIP file created: {zip_path}")
