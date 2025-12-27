@@ -184,9 +184,14 @@ async def generate_pdfs(request: GenerationRequest):
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"PDF Generation Error: {str(e)}")
+        error_msg = str(e)
+        print(f"PDF Generation Error: {error_msg}")
         print(f"Traceback: {error_trace}")
-        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+        # Return more detailed error in response for debugging
+        raise HTTPException(
+            status_code=500, 
+            detail=f"PDF generation failed: {error_msg}. Check server logs for full traceback."
+        )
 
 
 @app.get("/api/download/{pdf_id}/{copy_number}")

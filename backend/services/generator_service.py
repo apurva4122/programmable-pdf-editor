@@ -103,7 +103,13 @@ class GeneratorService:
                 
                 # Generate PDF with replacements
                 print(f"  Replacing text in PDF...")
-                pdf_bytes = self.pdf_service.replace_text_in_pdf(pdf_path, replacements, ocr_coords)
+                try:
+                    pdf_bytes = self.pdf_service.replace_text_in_pdf(pdf_path, replacements, ocr_coords)
+                except Exception as pdf_error:
+                    import traceback
+                    print(f"  ERROR in replace_text_in_pdf: {pdf_error}")
+                    print(f"  Traceback: {traceback.format_exc()}")
+                    raise Exception(f"PDF text replacement failed: {pdf_error}")
                 
                 # Save to file
                 output_path = self.output_dir / f"{pdf_path.stem}_copy_{copy_num + 1}.pdf"
