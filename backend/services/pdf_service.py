@@ -375,30 +375,45 @@ class PDFService:
                             
                             # Apply redactions (this removes the text)
                             try:
-                                # Apply redactions with image parameter to ensure text is removed
-                                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)  # Remove text, don't add image
+                                # First, try to apply redactions normally
+                                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
                                 print(f"  ✓ Applied redactions")
                                 
                                 # Verify text was removed
                                 page_text_after = page.get_text()
                                 if old_text in page_text_after:
                                     print(f"  ⚠ Warning: Text '{old_text}' still present after redaction!")
+                                    print(f"  Attempting alternative: drawing white rectangles...")
+                                    # If redaction didn't work, draw white rectangles to cover the text
+                                    for inst in text_instances:
+                                        rect = fitz.Rect(inst)
+                                        # Draw white filled rectangle to cover the text
+                                        shape = page.new_shape()
+                                        shape.draw_rect(rect)
+                                        shape.finish(fill=(1, 1, 1), color=(1, 1, 1))  # White fill and stroke
+                                        shape.commit()
+                                    print(f"  ✓ Drew white rectangles to cover text")
                                 else:
                                     print(f"  ✓ Verified: Text '{old_text}' removed successfully")
                             except Exception as e:
                                 print(f"    Error: Redaction failed: {e}")
                                 import traceback
                                 print(traceback.format_exc())
-                                # Try alternative: manually draw white rectangle
+                                # Fallback: manually draw white rectangles
                                 try:
-                                    print(f"    Attempting manual text removal with white rectangle...")
+                                    print(f"    Attempting manual text removal with white rectangles...")
                                     for inst in text_instances:
-                                        # Draw white rectangle to cover the text
                                         rect = fitz.Rect(inst)
-                                        page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1), width=0)
-                                    print(f"    ✓ Drew white rectangles to cover text")
+                                        # Use shape to draw white rectangle
+                                        shape = page.new_shape()
+                                        shape.draw_rect(rect)
+                                        shape.finish(fill=(1, 1, 1), color=(1, 1, 1))
+                                        shape.commit()
+                                    print(f"    ✓ Drew white rectangles to cover text (fallback)")
                                 except Exception as manual_error:
                                     print(f"    Manual removal also failed: {manual_error}")
+                                    import traceback
+                                    print(traceback.format_exc())
                             
                             # Insert new text at the redacted positions
                             # IMPORTANT: After apply_redactions(), we need to insert text as new content
