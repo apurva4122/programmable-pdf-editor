@@ -85,20 +85,26 @@ class PDFService:
                                     # PDF uses bottom-left origin (y=0 at bottom, increases upward)
                                     # 
                                     # OCR bounding box:
-                                    #   - Top edge: ocr_y (in pixels)
-                                    #   - Bottom edge: ocr_y + ocr_height (in pixels)
+                                    #   - Top edge: ocr_y (in pixels, measured from top of image)
+                                    #   - Bottom edge: ocr_y + ocr_height (in pixels, measured from top of image)
                                     #
-                                    # Convert to PDF points:
-                                    ocr_y_top_pt = ocr_y * scale_factor  # Top edge in PDF points (from top)
-                                    ocr_y_bottom_pt = (ocr_y + ocr_height) * scale_factor  # Bottom edge in PDF points (from top)
+                                    # Step 1: Scale OCR pixels to PDF points
+                                    ocr_y_top_pt = ocr_y * scale_factor  # Top edge in PDF points (still measured from top)
+                                    ocr_y_bottom_pt = (ocr_y + ocr_height) * scale_factor  # Bottom edge in PDF points (still measured from top)
                                     
-                                    # Flip to bottom-left origin:
-                                    # pdf_y1 = top of box (closer to top of page = larger y in PDF)
-                                    # pdf_y0 = bottom of box (closer to bottom of page = smaller y in PDF)
-                                    pdf_y1 = page_height_pt - ocr_y_top_pt  # Top of text box in PDF coordinates
-                                    pdf_y0 = page_height_pt - ocr_y_bottom_pt  # Bottom of text box in PDF coordinates
+                                    # Step 2: Convert from top-left origin to bottom-left origin
+                                    # In PDF: y=0 is at bottom, y=page_height is at top
+                                    # So: pdf_y = page_height - ocr_y_scaled
+                                    pdf_y1 = page_height_pt - ocr_y_top_pt  # Top of text box in PDF coordinates (larger y value)
+                                    pdf_y0 = page_height_pt - ocr_y_bottom_pt  # Bottom of text box in PDF coordinates (smaller y value)
                                     
                                     pdf_x1 = pdf_x0 + pdf_width
+                                    
+                                    print(f"    Y coordinate conversion:")
+                                    print(f"      OCR top: {ocr_y}px -> {ocr_y_top_pt:.2f}pt (from top)")
+                                    print(f"      OCR bottom: {ocr_y + ocr_height}px -> {ocr_y_bottom_pt:.2f}pt (from top)")
+                                    print(f"      PDF y1 (top): {page_height_pt:.2f} - {ocr_y_top_pt:.2f} = {pdf_y1:.2f}")
+                                    print(f"      PDF y0 (bottom): {page_height_pt:.2f} - {ocr_y_bottom_pt:.2f} = {pdf_y0:.2f}")
                                     
                                     # Ensure coordinates are within page bounds
                                     pdf_x0 = max(0, min(pdf_x0, page_width_pt))
@@ -298,11 +304,17 @@ class PDFService:
                                             # Text box height includes ascenders/descenders, so font is smaller
                                             estimated_size = rect_height * 0.75  # More conservative estimate
                                             
-                                            if 6 <= estimated_size <= 72:  # Reasonable font size range
-                                                font_size = estimated_size
-                                                print(f"    Estimated font size from rect height: {font_size:.1f} (rect height: {rect_height:.1f})")
+                                            # Round to nearest reasonable value instead of rejecting
+                                            if estimated_size < 6:
+                                                font_size = 6  # Minimum reasonable font size
+                                                print(f"    Estimated size {estimated_size:.1f} too small, using minimum: {font_size}")
+                                            elif estimated_size > 72:
+                                                font_size = 72  # Maximum reasonable font size
+                                                print(f"    Estimated size {estimated_size:.1f} too large, using maximum: {font_size}")
                                             else:
-                                                print(f"    Using default font size: {font_size} (estimated {estimated_size:.1f} was out of range)")
+                                                # Round to nearest 0.5 for cleaner values
+                                                font_size = round(estimated_size * 2) / 2
+                                                print(f"    Estimated font size from rect height: {font_size:.1f} (rect height: {rect_height:.1f}, raw estimate: {estimated_size:.1f})")
                                     
                                     font_info_list.append({
                                         'rect': rect,
@@ -318,15 +330,24 @@ class PDFService:
                                     import traceback
                                     print(traceback.format_exc())
                                     # Estimate from rect if available
-                                    estimated_size = (inst.y1 - inst.y0) * 0.8 if hasattr(inst, 'y1') and hasattr(inst, 'y0') else 12
+                                    estimated_size = (inst.y1 - inst.y0) * 0.75 if hasattr(inst, 'y1') and hasattr(inst, 'y0') else 12
+                                    # Round to nearest reasonable value
+                                    if estimated_size < 6:
+                                        final_size = 6
+                                    elif estimated_size > 72:
+                                        final_size = 72
+                                    else:
+                                        final_size = round(estimated_size * 2) / 2  # Round to nearest 0.5
+                                    
                                     font_info_list.append({
                                         'rect': fitz.Rect(inst),
-                                        'font_size': estimated_size if 6 <= estimated_size <= 72 else 12,
+                                        'font_size': final_size,
                                         'font_name': 'helv',
                                         'x0': inst.x0,
                                         'y0': inst.y0,
                                         'y1': inst.y1
                                     })
+                                    print(f"    Fallback font size: {final_size:.1f} (estimated: {estimated_size:.1f})")
                             
                             # Add redaction annotations
                             redaction_count = 0
