@@ -57,7 +57,7 @@ class PDFService:
                             coord_info = ocr_coordinates[old_text]
                             if coord_info.get("page") == page_num:
                                 # Convert OCR coordinates to PDF coordinates
-                                # OCR coordinates are typically in pixels from top-left
+                                # OCR coordinates are in pixels from top-left (from image)
                                 # PDF coordinates are in points (72 DPI) from bottom-left
                                 try:
                                     ocr_x = coord_info.get("x", 0)
@@ -67,20 +67,46 @@ class PDFService:
                                     
                                     # Get page dimensions
                                     page_rect = page.rect
+                                    page_width = page_rect.width
                                     page_height = page_rect.height
                                     
-                                    # Convert OCR coordinates (top-left origin) to PDF coordinates (bottom-left origin)
-                                    # Assuming OCR image is same size as PDF page
+                                    # Get the image dimensions from OCR (typically DPI-based)
+                                    # OCR images are usually at 200-300 DPI, PDF is 72 DPI
+                                    # We need to scale the coordinates
+                                    # First, try to get the actual image size from the page
+                                    # For now, assume OCR image matches PDF page size in pixels
+                                    # Common OCR DPI: 200-300, PDF DPI: 72
+                                    # Scale factor: PDF points = OCR pixels * (72 / OCR_DPI)
+                                    # But we don't know OCR DPI, so we'll use the page dimensions directly
+                                    
+                                    # OCR coordinates are from the image (top-left origin)
+                                    # PDF coordinates are from bottom-left origin
+                                    # Convert: pdf_y = page_height - ocr_y (flip vertically)
+                                    
+                                    # Scale OCR pixels to PDF points (assuming 1:1 for now, but may need adjustment)
+                                    # If OCR was done at 200 DPI and PDF is 72 DPI: scale = 72/200 = 0.36
+                                    # For now, assume OCR image size matches PDF page size
                                     pdf_x0 = ocr_x
-                                    pdf_y0 = page_height - (ocr_y + ocr_height)  # Flip Y coordinate
+                                    pdf_y0 = page_height - (ocr_y + ocr_height)  # Flip Y: bottom-left origin
                                     pdf_x1 = ocr_x + ocr_width
                                     pdf_y1 = page_height - ocr_y
                                     
+                                    # Ensure coordinates are within page bounds
+                                    pdf_x0 = max(0, min(pdf_x0, page_width))
+                                    pdf_x1 = max(0, min(pdf_x1, page_width))
+                                    pdf_y0 = max(0, min(pdf_y0, page_height))
+                                    pdf_y1 = max(0, min(pdf_y1, page_height))
+                                    
                                     text_rect = fitz.Rect(pdf_x0, pdf_y0, pdf_x1, pdf_y1)
                                     text_instances = [text_rect]
-                                    print(f"    ✓ Using OCR coordinates: ({pdf_x0:.1f}, {pdf_y0:.1f}) to ({pdf_x1:.1f}, {pdf_y1:.1f})")
+                                    print(f"    ✓ Using OCR coordinates:")
+                                    print(f"      OCR: x={ocr_x}, y={ocr_y}, w={ocr_width}, h={ocr_height}")
+                                    print(f"      PDF: ({pdf_x0:.1f}, {pdf_y0:.1f}) to ({pdf_x1:.1f}, {pdf_y1:.1f})")
+                                    print(f"      Page size: {page_width}x{page_height}")
                                 except Exception as coord_error:
                                     print(f"    Error converting OCR coordinates: {coord_error}")
+                                    import traceback
+                                    print(traceback.format_exc())
                                     text_instances = []
                         
                         # If OCR coordinates didn't work, try text search
@@ -199,20 +225,36 @@ class PDFService:
                                     
                                     font_size = 12
                                     font_name = "helv"
+                                    best_match_area = 0
                                     
                                     # Find font info for this text instance
+                                    # Look for spans that overlap with our rect
                                     for block in text_dict.get("blocks", []):
                                         if "lines" in block:
                                             for line in block["lines"]:
                                                 for span in line.get("spans", []):
                                                     span_bbox = span.get("bbox", [])
                                                     if len(span_bbox) == 4:
-                                                        # Check if span overlaps with our rect
                                                         span_rect = fitz.Rect(span_bbox)
+                                                        # Check if span overlaps with our rect
                                                         if rect.intersects(span_rect):
-                                                            font_size = span.get("size", 12)
-                                                            font_name = span.get("font", "helv")
-                                                            break
+                                                            # Calculate overlap area to find best match
+                                                            overlap = rect & span_rect
+                                                            overlap_area = overlap.width * overlap.height if overlap.is_valid else 0
+                                                            
+                                                            if overlap_area > best_match_area:
+                                                                best_match_area = overlap_area
+                                                                font_size = span.get("size", 12)
+                                                                font_name = span.get("font", "helv")
+                                                                print(f"    Found font match: size={font_size}, name={font_name}, overlap_area={overlap_area:.1f}")
+                                    
+                                    # If no match found, try to estimate from rect height
+                                    if font_size == 12 and best_match_area == 0:
+                                        # Estimate font size from rect height (typically font_size ≈ height * 0.8)
+                                        estimated_size = rect.height * 0.8
+                                        if 6 <= estimated_size <= 72:  # Reasonable font size range
+                                            font_size = estimated_size
+                                            print(f"    Estimated font size from rect height: {font_size:.1f}")
                                     
                                     font_info_list.append({
                                         'rect': rect,
@@ -222,12 +264,16 @@ class PDFService:
                                         'y0': inst.y0,
                                         'y1': inst.y1
                                     })
-                                    print(f"    Instance font: size={font_size}, name={font_name}")
+                                    print(f"    Final font info: size={font_size:.1f}, name={font_name}")
                                 except Exception as e:
                                     print(f"    Could not get font info: {e}")
+                                    import traceback
+                                    print(traceback.format_exc())
+                                    # Estimate from rect if available
+                                    estimated_size = (inst.y1 - inst.y0) * 0.8 if hasattr(inst, 'y1') and hasattr(inst, 'y0') else 12
                                     font_info_list.append({
                                         'rect': fitz.Rect(inst),
-                                        'font_size': 12,
+                                        'font_size': estimated_size if 6 <= estimated_size <= 72 else 12,
                                         'font_name': 'helv',
                                         'x0': inst.x0,
                                         'y0': inst.y0,
@@ -260,14 +306,20 @@ class PDFService:
                                 try:
                                     # Calculate insertion point
                                     # PyMuPDF coordinate system: origin at bottom-left
-                                    # y1 is the bottom of the text box, y0 is the top
+                                    # The rect: x0=left, y0=bottom, x1=right, y1=top
+                                    # For text insertion, we need the baseline position
+                                    # Baseline is typically at y0 (bottom of text box) + some offset
+                                    
                                     insert_x = font_info['x0']
-                                    # Position text at baseline (slightly above y1 to account for font descent)
-                                    # Most fonts have about 20% descent, so we position slightly above y1
-                                    insert_y = font_info['y1'] - (font_info['font_size'] * 0.15)
+                                    # Position text at baseline
+                                    # In PDF, text is positioned at the baseline (bottom of text)
+                                    # y0 is the bottom of the rect, which should be near the baseline
+                                    # Adjust slightly to account for font metrics
+                                    insert_y = font_info['y0'] + (font_info['font_size'] * 0.2)  # Slight offset for baseline
                                     
                                     print(f"    Attempting to insert '{new_text}' at ({insert_x:.2f}, {insert_y:.2f})")
-                                    print(f"    Original rect: x0={font_info['x0']:.2f}, y0={font_info['y0']:.2f}, y1={font_info['y1']:.2f}")
+                                    print(f"    Original rect: x0={font_info['x0']:.2f}, y0={font_info['y0']:.2f}, x1={font_info.get('x1', font_info['x0']+100):.2f}, y1={font_info['y1']:.2f}")
+                                    print(f"    Font: size={font_info['font_size']:.1f}, name={font_info['font_name']}")
                                     
                                     # Method 1: Use insert_text with explicit rendering
                                     try:
